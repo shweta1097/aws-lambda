@@ -1,0 +1,36 @@
+#triggers
+name: Automated Lambda GitOps Pipeline
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+permissions:
+  id-token: write  #cruicial for OIDC authentication
+  contents: read  #to read the repo contents
+  pull-requests: write  #Allows writing output logs back to PR review screens
+jobs:
+  # JOB 1: Validation Engine (Runs on BOTH Push and Pull Requests)
+  validate-and-plan:
+    name: Terraform Validate and Plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout code repository 
+        uses: actions/checkout@v3
+      # Route to the appropriate OIDC IAM Role depending on target branch/PR environment
+      - name: Authenticate to AWS via OIDC
+        id: assume-role
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: $${{ github.base_ref == 'main' || github.ref == 'refs/heads/main' && '' || ''}} #ternary operator to route to the appropriate OIDC IAM Role depending on target branch/PR environment
+          aws-region: ap-south-1
+      - name: setup terraform binary
+        uses: hashicorp/setup-terraform@v3
+      - name: terraform init
+        run: terraform init
+      - name: check code formatting
+        run: terraform fmt -check
+      - name: terraform validate
+        run: terraform validate
+      - name: terraform plan
+        run: terraform plan -out=tfplan
