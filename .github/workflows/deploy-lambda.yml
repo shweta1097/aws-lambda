@@ -17,6 +17,13 @@ jobs:
     steps:
       - name: checkout code repository 
         uses: actions/checkout@v3
+      - name: Debug GitHub Context
+        run: |
+            echo "Repository=${{ github.repository }}"
+            echo "Ref=${{ github.ref }}"
+            echo "BaseRef=${{ github.base_ref }}"
+            echo "HeadRef=${{ github.head_ref }}"
+            echo "Event=${{ github.event_name }}"
       # Route to the appropriate OIDC IAM Role depending on target branch/PR environment
       - name: Authenticate to AWS via OIDC
         id: assume-role
