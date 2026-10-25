@@ -8,9 +8,9 @@ terraform {
     }
   }
   backend "s3" {
-    bucket = "value"
-    key    = "value"
-    region = "value"
-    dynamodb_table = "value"
+    bucket = "shweta-lambda "
+    key    = "shweta-lambda/terraform.tfstate"
+    region = "ap-south-1"
+    dynamodb_table = "dynamodb-table"
   }
 }
