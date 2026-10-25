@@ -22,7 +22,7 @@ jobs:
         id: assume-role
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          role-to-assume: $${{ github.base_ref == 'main' || github.ref == 'refs/heads/main' && 'arn:aws:iam::120569629518:role/terraform-oidc-deployer-role' || 'arn:aws:iam::120569629518:role/terraform-oidc-deployer-role'}} #ternary operator to route to the appropriate OIDC IAM Role depending on target branch/PR environment
+          role-to-assume: $${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && 'arn:aws:iam::120569629518:role/terraform-oidc-deployer-role' || 'arn:aws:iam::120569629518:role/terraform-oidc-deployer-role'}} #ternary operator to route to the appropriate OIDC IAM Role depending on target branch/PR environment
           aws-region: ap-south-1
       - name: setup terraform binary
         uses: hashicorp/setup-terraform@v3
