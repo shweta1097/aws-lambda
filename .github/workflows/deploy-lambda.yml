@@ -2,7 +2,7 @@
 name: Automated Lambda GitOps Pipeline
 on:
   push:
-    branches: [main, stagging]
+    branches: [main, staging]
   pull_request:
     branches: [main, staging]
 permissions:
@@ -17,12 +17,19 @@ jobs:
     steps:
       - name: checkout code repository 
         uses: actions/checkout@v3
+      - name: Debug GitHub Context
+        run: |
+            echo "Repository=${{ github.repository }}"
+            echo "Ref=${{ github.ref }}"
+            echo "BaseRef=${{ github.base_ref }}"
+            echo "HeadRef=${{ github.head_ref }}"
+            echo "Event=${{ github.event_name }}"
       # Route to the appropriate OIDC IAM Role depending on target branch/PR environment
       - name: Authenticate to AWS via OIDC
         id: assume-role
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          role-to-assume: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && 'arn:aws:iam::120569629518:role/terraform-oidc-deployer-role' || 'arn:aws:iam::120569629518:role/terraform-oidc-deployer-role'}} #ternary operator to route to the appropriate OIDC IAM Role depending on target branch/PR environment
+          role-to-assume: ${{ (github.ref == 'refs/heads/main') && 'arn:aws:iam::120569629518:role/terraform-oidc-deployer-role' || 'arn:aws:iam::120569629518:role/terraform-oidc-deployer-role'}} #ternary operator to route to the appropriate OIDC IAM Role depending on target branch/PR environment
           aws-region: ap-south-1
       - name: setup terraform binary
         uses: hashicorp/setup-terraform@v3
