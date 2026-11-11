@@ -3,7 +3,7 @@ resource "aws_lambda_function"  "compliance_lambda" {
     function_name = "evening-ec2-cost-optimizer"
     filename = data.archive_file.lamda_zip.output_path
     role = aws_iam_role.lambda_ec2_role.arn
-    handler = "stop_ec2.lambda_handler"
+    handler = "lambda-function.lambda_handler"
     runtime = "python3.14"
     source_code_hash = data.archive_file.lamda_zip.output_base64sha256 
 
