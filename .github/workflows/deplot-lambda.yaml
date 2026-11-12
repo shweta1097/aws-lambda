@@ -42,6 +42,8 @@ jobs:
             echo "BaseRef=${{ github.base_ref }}"
             echo "HeadRef=${{ github.head_ref }}"
             echo "Event=${{ github.event_name }}"
+      - name: Verify Identity
+        run: aws sts get-caller-identity
       # Route to the appropriate OIDC IAM Role depending on target branch/PR environment
       - name: Authenticate to AWS via OIDC
         id: assume-role
