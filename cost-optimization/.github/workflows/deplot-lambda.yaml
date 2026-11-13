@@ -1,0 +1,112 @@
+#triggers
+name: Automated Lambda GitOps Pipeline
+on: 
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+permissions:
+  id-token: write  #cruicial for OIDC authentication
+  contents: read  #to read the repo contents
+  pull-requests: write  #Allows writing output logs back to PR review screens
+jobs:
+  #Job 1: Allow only dev to main PR merges (prevents accidental merges from feature branches to main)
+  validate-source-branch:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main' #only run this job if the PR is targeting the main branch
+    name: allow only dev to main PR merges
+    runs-on: ubuntu-latest
+    steps: 
+      - name: Verify source branch is dev
+        run: |
+          if [[ "${{ github.head_ref }}" != "dev" ]]; then
+            echo "Error: Only PRs from the 'dev' branch to 'main' are allowed."
+            exit 1
+          fi 
+  #JOB 2: Validation Engine (Runs on BOTH Push and Pull Requests)
+  validate-and-plan:
+    name: Terraform Validate and Plan
+
+    needs: validate-source-branch
+    if: |
+      always() &&
+      (needs.validate-source-branch.result == 'success' ||
+       needs.validate-source-branch.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout code repository 
+        uses: actions/checkout@v3
+      - name: Show GitHub Context
+        run: |
+            echo "Repository=${{ github.repository }}"
+            echo "Ref=${{ github.ref }}"
+            echo "BaseRef=${{ github.base_ref }}"
+            echo "HeadRef=${{ github.head_ref }}"
+            echo "Event=${{ github.event_name }}"
+      # Route to the appropriate OIDC IAM Role depending on target branch/PR environment
+      - name: Authenticate to AWS via OIDC
+        id: assume-role
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: ${{ (github.ref == 'refs/heads/main') && 'arn:aws:iam::120569629518:role/terraform-oidc-deployer-role' || 'arn:aws:iam::120569629518:role/terraform-oidc-deployer-role'}} #ternary operator to route to the appropriate OIDC IAM Role depending on target branch/PR environment
+          aws-region: ap-south-1
+      - name: Verify Identity
+        run: aws sts get-caller-identity
+      - name: setup terraform binary
+        uses: hashicorp/setup-terraform@v3
+      - name: terraform init
+        run: terraform init
+      - name: check code formatting
+        run: terraform fmt -check
+      - name: terraform validate
+        run: terraform validate
+      - name: Terraform Plan
+        id: plan
+        run: |
+            terraform plan -out=tfplan -no-color > plan.txt
+      - name: Comment Terraform Plan on PR
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('plan.txt', 'utf8');
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## Terraform Plan\n\`\`\`\n${plan}\n\`\`\``
+            });
+      - name: Upload Plan Artifact
+        uses: actions/upload-artifact@v4
+        with:
+            name: terraform-plan
+            path:
+              tfplan 
+              plan.txt
+  # job3: Deployment from main branch 
+  deploy-infrastructure:
+    name: Terraform apply deployment
+    needs: validate-and-plan # Ensures deployment only triggers if tests pass successfully
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps: 
+      - name: checkout code repository
+        uses: actions/checkout@v3
+       # Route authentication tokens to the correct account target boundary
+      - name: Authenticate to AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: arn:aws:iam::120569629518:role/terraform-oidc-deployer-role
+          aws-region: ap-south-1
+      - name: setup terraform binary
+        uses: hashicorp/setup-terraform@v3
+      - name: Download Plan Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+          path: .
+      - name: Execute live infrastructure deployment
+        run: |
+          terraform init
+          terraform apply -auto-approve tfplan
